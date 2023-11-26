@@ -64,7 +64,7 @@ int main() {
 
         // Procesar el mensaje
         buffer[recv_len] = '\0';
-
+        printf("Mensaje: %s\n", buffer);
         if (strncmp(buffer, "SET", 3) == 0) {
             // Mensaje SET: Almacena el nombre del dispositivo
             char* name = strtok(buffer + 4, " ");
@@ -74,6 +74,7 @@ int main() {
                 inet_ntop(AF_INET, &(client_addr.sin_addr), devices[numDevices].ip, INET_ADDRSTRLEN);
                 numDevices++;
                 printf("Nombre del dispositivo '%s' almacenado.\n", name);
+                sendto(sockfd, "200 OK", 6, 0, (struct sockaddr*)&client_addr, len);
             }
         } else if (strncmp(buffer, "TEMP", 4) == 0 || strncmp(buffer, "AIR", 3) == 0) {
             // Mensaje TEMP o AIR: Buscar el dispositivo y responder o 404 si no se encuentra
@@ -103,6 +104,7 @@ int main() {
         } else if (strncmp(buffer, "DEL", 3) == 0) {
             // Mensaje DEL: Eliminar manualmente un dispositivo conocido
             char* deviceName = strtok(buffer + 4, " ");
+            printf(deviceName);
             if (deviceName != NULL) {
                 int deviceIndex = findDevice(deviceName);
                 if (deviceIndex != -1) {
@@ -115,6 +117,7 @@ int main() {
         } else if (strncmp(buffer, "WHO", 3) == 0) {
             // Mensaje WHO: Responder con la IP y el nombre del dispositivo
             char response[100];
+            printf(buffer + 4);
             snprintf(response, sizeof(response), "IP: %s, Nombre: %s", inet_ntoa(client_addr.sin_addr), devices[findDevice(buffer + 4)].name);
             sendto(sockfd, response, strlen(response), 0, (struct sockaddr*)&client_addr, len);
         } else if (strncmp(buffer, "LIST", 4) == 0) {
@@ -125,9 +128,12 @@ int main() {
                 strcat(response, devices[i].name);
                 strcat(response, "\n");
             }
+            printf("hola");
             sendto(sockfd, response, strlen(response), 0, (struct sockaddr*)&client_addr, len);
         } else {
+            
             printf("Mensaje no reconocido: %s\n", buffer);
+            sendto(sockfd, "400 Bad Request", 15, 0, (struct sockaddr*)&client_addr, len);
         }
     }
 
