@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <time.h>
 
 #define SERVER_PORT 9999 // Cambia esto con el puerto de tu servidor
 #define MAX_MESSAGE_LEN 1024
@@ -29,17 +30,26 @@ void flush_stdin()
         ;
 }
 
+unsigned long getMillis()
+{
+    clock_t currentTime = clock();
+    return (unsigned long)(currentTime * 1000 / CLOCKS_PER_SEC);
+}
+
+
 int main()
 {
+    int timeout = 10000;
+
     int clientSocket;
     struct sockaddr_in serverAddr;
     char message[MAX_MESSAGE_LEN];
     char buffer[MAX_MESSAGE_LEN];
     char serverIP[16]; // Se asume que una dirección IPv4 tiene un máximo de 15 caracteres.
 
-    // Leer la dirección IP desde la consola
-    printf("Ingrese la dirección IP del servidor: ");
-    scanf("%15s", serverIP);
+    printf("Ingrese la dirección IP del servidor: \n");
+    fgets(serverIP, sizeof(serverIP), stdin);
+    trim(serverIP);
 
     // Crear un socket UDP
     if ((clientSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -63,14 +73,11 @@ int main()
 
     while (1)
     {
+        memset(buffer, 0, sizeof(buffer));
         // Obtener el mensaje del usuario
-        printf("Ingrese el mensaje (EXIT para salir): ");
+        printf("Ingrese el mensaje (EXIT para salir): \n");
         fgets(message, MAX_MESSAGE_LEN, stdin);
         trim(message);
-        // Enviar el mensaje al servidor
-        sendto(clientSocket, (const char *)message, strlen(message) + 1,
-               MSG_CONFIRM, (const struct sockaddr *)&serverAddr,
-               sizeof(serverAddr));
 
         // Salir si el usuario escribe "EXIT"
         if (strncmp(message, "EXIT", 4) == 0)
@@ -79,21 +86,35 @@ int main()
             break;
         }
 
-        flush_stdin();
+        // Enviar el mensaje al servidor
+        sendto(clientSocket, (const char *)message, strlen(message) + 1,
+               MSG_CONFIRM, (const struct sockaddr *)&serverAddr,
+               sizeof(serverAddr));
+
+
         // Esperar la respuesta del servidor
-        ssize_t bytesRead = recvfrom(clientSocket, buffer, MAX_MESSAGE_LEN,
-                                     MSG_WAITALL, NULL, NULL);
-        if (bytesRead == -1)
+        unsigned long startTime = getMillis();
+        while (getMillis() - startTime < timeout)
         {
-            perror("Error al recibir la respuesta del servidor");
-            close(clientSocket);
-            exit(EXIT_FAILURE);
+            ssize_t bytesRead = recvfrom(clientSocket, buffer, MAX_MESSAGE_LEN,
+                                         MSG_WAITALL, NULL, NULL);
+
+            if (bytesRead > 0)
+            {
+                // Respuesta del servidor recibida
+                buffer[bytesRead] = '\0';
+                printf("Respuesta del servidor: %s\n", buffer);
+                break;
+            }
         }
 
-        // Agregar el terminador nulo al final del buffer
-        buffer[bytesRead] = '\0';
-        printf("Respuesta del servidor: %s\n", buffer);
-        memset(buffer, 0, sizeof(buffer));
+        // Verificar si ha habido un timeout
+        if (getMillis() - startTime >= timeout)
+        {
+            printf("Timeout: No se recibió respuesta del servidor en %d segundos.\n", timeout / 1000);
+            // Puedes agregar aquí el código para manejar el timeout según tus necesidades
+        }
+        //
     }
 
     // Cerrar el socket

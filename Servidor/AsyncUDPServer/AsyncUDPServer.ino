@@ -4,38 +4,22 @@
  */
 
 #include "WiFi.h"
-#include "AsyncUDP.h"
 #include "WiFiUdp.h"
+#include "Domotic.h"
 
 // Constants
-#define PORT 9999
-#define MAX_NAME_LENGTH 50
-
-// Data structure to store device information
-struct Device
-{
-  String name;  ///< Device name
-  IPAddress ip; ///< Device IP address
-};
-
-Device devices[16];     ///< Array to store devices
-int numDevices = 0;     ///< Number of devices connected to the server
-String serverName = ""; ///< Name of the server
-
-uint8_t LED2pin = 21;  ///< Pin number for LED2
-bool LED2status = LOW; ///< Status of LED2
 
 const char *ssid = "Hipermegared 2.4GHz"; ///< WiFi SSID
 const char *password = "0043130185";      ///< WiFi password
 
-AsyncUDP udp; ///< AsyncUDP object for handling UDP communication
+AsyncUDP udp; ///< Objeto AsyncUDP para manejar la comunicación UDP
 
 /**
- * @brief Sends an asynchronous UDP request.
- * @param message The message to be sent.
- * @param targetIP The IP address of the target device.
- * @param targetPort The port number of the target device.
- * @return The response received from the target device.
+ * @brief Envía una solicitud UDP asíncrona.
+ * @param message El mensaje a enviar.
+ * @param targetIP La dirección IP del dispositivo objetivo.
+ * @param targetPort El número de puerto del dispositivo objetivo.
+ * @return La respuesta recibida del dispositivo objetivo.
  */
 String sendUDPRequest(const char *message, IPAddress targetIP, int targetPort)
 {
@@ -90,7 +74,7 @@ int validateDevice(String nameToActivate)
  * @param value The value to set.
  * @return True if the SET method was handled successfully, false otherwise.
  */
-bool onSetHandler(String key, String value)
+bool localSetHandler(String key, String value)
 {
   if (key == "LED")
   {
@@ -115,7 +99,7 @@ bool onSetHandler(String key, String value)
  * @param key The key to get.
  * @return The value corresponding to the key.
  */
-String onGETHandler(String key)
+String localGETHandler(String key)
 {
   if (key == "TEMP")
   {
@@ -157,10 +141,14 @@ String deviceName(String packetData, int start)
  */
 void handleSETMethod(String nameToActivate, String key, String value, AsyncUDPPacket packet)
 {
-  if (nameToActivate == serverName || nameToActivate.isEmpty())
+  Serial.printf("SET '%s' %s %s\n", nameToActivate.c_str(), key.c_str(), value.c_str());
+  Serial.printf("Server name: '%s'\n", serverName.c_str());
+  
+
+  if (nameToActivate.equals(serverName))
   {
     Serial.println("Activating local device");
-    if (onSetHandler(key, value))
+    if (localSetHandler(key, value))
     {
       packet.printf("200 OK");
     }
@@ -182,8 +170,10 @@ void handleSETMethod(String nameToActivate, String key, String value, AsyncUDPPa
     String requestStr = "SET " + key + " " + value;
     bool found = false;
     String response;
+    Serial.printf("Searching for device '%s'\n", nameToActivate.c_str());
     for (int i = 0; i < numDevices; ++i)
     {
+      Serial.printf("Sending request to device '%s': %s\n", devices[i].name.c_str(), requestStr.c_str());
       IPAddress ip = devices[i].ip;
       String response = sendUDPRequest(requestStr.c_str(), ip, 9999);
       Serial.printf("Response from device '%s': %s\n", devices[i].name.c_str(), response.c_str());
@@ -214,10 +204,10 @@ void handleSETMethod(String nameToActivate, String key, String value, AsyncUDPPa
  */
 void handleGETMethod(String nameToActivate, String key, AsyncUDPPacket packet)
 {
-  if (nameToActivate == serverName || nameToActivate.isEmpty())
+  if (nameToActivate == serverName)
   {
     Serial.println("Getting from local device");
-    String response = onGETHandler(key);
+    String response = localGETHandler(key);
     packet.printf("200 OK %s", response.c_str());
   }
   else if (validateDevice(nameToActivate) != -1)
@@ -253,6 +243,25 @@ void handleGETMethod(String nameToActivate, String key, AsyncUDPPacket packet)
     {
       packet.printf("404 Not Found");
     }
+  }
+}
+
+void handleName(String &packetData, AsyncUDPPacket &packet)
+{
+  int spaceIndex = packetData.indexOf(' ');
+  if (spaceIndex != -1)
+  {
+    String name = packetData.substring(spaceIndex + 1);
+    Serial.printf("Device name '%s' received.\n", name.c_str());
+    serverName = name;
+    Serial.printf("Device name '%s' stored.\n", serverName.c_str());
+    packet.printf("200 OK %s", serverName.c_str());
+  }
+  else
+  {
+    // No space, no name provided
+    Serial.println("No name provided in the SET command");
+    packet.printf("400 Bad Request");
   }
 }
 
@@ -312,21 +321,8 @@ void setup()
       if (packetData.startsWith("NAME"))
       {
         // NAME message: Store the device name
-        int spaceIndex = packetData.indexOf(' ');
-        if (spaceIndex != -1)
-        {
-          String name = packetData.substring(spaceIndex + 1);
-          Serial.printf("Device name '%s' received.\n", name.c_str());
-          serverName = name;
-          Serial.printf("Device name '%s' stored.\n", serverName.c_str());
-          packet.printf("200 OK %s", serverName.c_str());
-        }
-        else
-        {
-          // No space, no name provided
-          Serial.println("No name provided in the SET command");
-          packet.printf("400 Bad Request");
-        }
+        handleName(packetData, packet);
+        packet.printf("200 OK %s", serverName.c_str());
       }
       else if (packetData.startsWith("ADD"))
       {
@@ -429,7 +425,11 @@ void setup()
           splitted = strtok(NULL, " ");
           index++;
         }
-
+        //print tokens
+        for (int i = 0; i < index; i++)
+        {
+          Serial.println(tokens[i]);
+        }
         if (index != 4)
         {
           Serial.println("400 Bad Request");
@@ -469,5 +469,5 @@ void setup()
  */
 void loop()
 {
-  delay(300);
+  delay(200);
 }
