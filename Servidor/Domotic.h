@@ -18,6 +18,8 @@ struct Device
 extern Device devices[16];     ///< Array to store devices
 extern int numDevices;     ///< Number of devices connected to the server
 extern String serverName; ///< Name of the server
+extern IPAddress serverIp; ///< IP address of the server
+extern IPAddress broadcastIP; ///< Broadcast IP address
 
 typedef bool (*SetCallBack)(const String& key, const String& value);
 typedef String (*GetCallBack)(const String& key);
@@ -39,7 +41,10 @@ String deviceName(String packetData, int start);
 String handleSETMethod(String nameToActivate, String key, String value);
 String handleGETMethod(String nameToActivate, String key);
 String handleNameMethod(String packetData);
-String handleWhoMethod(String packetData);
+String handleWhoMethod();
+String handleADDMethod(String packetData);
+String handleDELMethod(String packetData);
+String handleListMethod();
 String processUDPPacket(String data, size_t length);
 
 #endif // DOMOTIC_H
