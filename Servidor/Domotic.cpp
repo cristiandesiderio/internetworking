@@ -1,25 +1,34 @@
 #include "Domotic.h"
 #include "WiFiUdp.h"
 
-Device devices[16];     ///< Array to store devices
-int numDevices = 0;     ///< Number of devices connected to the server
-String serverName = ""; ///< Name of the server
-IPAddress serverIp;     ///< IP address of the server
-IPAddress broadcastIP;  ///< Broadcast IP address
+Device devices[16];
+int numDevices = 0;
+String serverName = "";
+IPAddress serverIp;
+IPAddress broadcastIP;
 
+/**
+ * @brief Comportamiento por defecto metodo SET.
+*/
 bool notImplementedSetHandler(String key, String value)
 {
     return false;
 }
 
+/**
+ * @brief Comportamiento por defecto metodo GET.
+*/
 String notImplementedGetHandler(String key, String value)
 {
     return "Set Not Implemented";
 }
 
-// Callback function for pin management
 SetCallBack setCallback = SetCallBack(notImplementedSetHandler);
 
+/**
+ * @brief Setea el comportamiento del metodo SET.
+ * @param callback Funcion que se ejecutara cuando se reciba un mensaje SET.
+*/
 void setSetCallback(SetCallBack callback)
 {
     setCallback = callback;
@@ -27,6 +36,10 @@ void setSetCallback(SetCallBack callback)
 
 GetCallBack getCallback = GetCallBack(notImplementedGetHandler);
 
+/**
+ * @brief Setea el comportamiento del metodo GET.
+ * @param callback Funcion que se ejecutara cuando se reciba un mensaje GET.
+*/
 void setGetCallback(GetCallBack callback)
 {
     getCallback = callback;
@@ -45,50 +58,49 @@ void trim(char *str)
     }
 }
 
+/**
+ * @brief Envia un mensaje UDP a un dispositivo de forma sincrona
+ * @param message Mensaje a enviar
+ * @param targetIP IP del dispositivo
+ * @param targetPort Puerto del dispositivo
+ * @return Respuesta del dispositivo
+ */
 String sendUDPRequest(const char *message, IPAddress targetIP, int targetPort)
 {
     WiFiUDP udpInstance;
     if (udpInstance.begin(1001))
     {
-        // Send the request using the provided WiFiUDP instance
+
         udpInstance.beginPacket(targetIP, targetPort);
         udpInstance.print(message);
         udpInstance.endPacket();
         Serial.println("Synchronous UDP request sent");
 
-        // Wait for the actual response
-        int timeout = 5000; // Adjust as needed
+        int timeout = 5000;
         unsigned long startTime = millis();
 
         while (millis() - startTime < timeout)
         {
-            Serial.println("Waiting for UDP response...");
-
             if (udpInstance.parsePacket())
             {
-                // Response received, process it
                 Serial.println("UDP response received");
-
-                // Dynamically allocate memory for response
                 uint16_t packetSize = udpInstance.available();
                 char *response = new char[packetSize + 1];
 
                 if (response)
                 {
                     udpInstance.read(response, packetSize);
-                    response[packetSize] = '\0'; // Null-terminate the response
-                    Serial.printf("UDP response: %s\n", response);
+                    response[packetSize] = '\0';
                     return response;
                 }
                 else
                 {
                     Serial.println("Memory allocation for response failed");
-                    return "500 Internal Server Error"; // You may want to handle this case more gracefully
+                    return "500 Internal Server Error";
                 }
             }
         }
 
-        // Timeout
         Serial.println("UDP request timeout");
         return "501 timeout";
     }
@@ -99,12 +111,15 @@ String sendUDPRequest(const char *message, IPAddress targetIP, int targetPort)
     }
 }
 
-// Validate if a device is connected to the server
-int validateDevice(String nameToActivate)
+/**
+ * @brief Valida si el dispositivo existe en la lista de dispositivos
+ * @param deviceName Nombre del dispositivo a validar
+*/
+int validateDevice(String deviceName)
 {
     for (int i = 0; i < numDevices; i++)
     {
-        if (devices[i].name == nameToActivate)
+        if (devices[i].name == deviceName)
         {
             return i;
         }
@@ -112,25 +127,15 @@ int validateDevice(String nameToActivate)
     return -1;
 }
 
-// deviceName
-String deviceName(String packetData, int start)
-{
-    String name = "";
-    for (int i = start; i < packetData.length(); i++)
-    {
-        if (packetData[i] == ' ')
-        {
-            break;
-        }
-        name += packetData[i];
-    }
-    return name;
-}
 
-// Handles the SET method
-String handleSETMethod(String nameToActivate, String key, String value)
+/**
+ * @brief Manejador del metodo SET
+ * @param deviceName Nombre del dispositivo a activar
+ * @param key Clave a setear
+*/
+String handleSETMethod(String deviceName, String key, String value)
 {
-    if (nameToActivate.equals(serverName))
+    if (deviceName.equals(serverName))
     {
         Serial.println("Activating local device");
         if (setCallback == NULL)
@@ -149,18 +154,18 @@ String handleSETMethod(String nameToActivate, String key, String value)
             }
         }
     }
-    else if (validateDevice(nameToActivate) != -1)
+    else if (validateDevice(deviceName) != -1)
     {
         Serial.println("Activating remote device");
-        IPAddress ip = devices[validateDevice(nameToActivate)].ip;
-        String requestStr = "SET " + nameToActivate + " " + key + " " + value;
+        IPAddress ip = devices[validateDevice(deviceName)].ip;
+        String requestStr = "SET " + deviceName + " " + key + " " + value;
         String response = sendUDPRequest(requestStr.c_str(), ip, 9999);
-        Serial.printf("Response from device '%s': %s\n", nameToActivate, response.c_str());
+        Serial.printf("Response from device '%s': %s\n", deviceName, response.c_str());
         return response.c_str();
     }
     else
     {
-        String requestStr = "SET " + nameToActivate + " " + key + " " + value;
+        String requestStr = "SET " + deviceName + " " + key + " " + value;
         String response;
         for (int i = 0; i < numDevices; ++i)
         {
@@ -179,10 +184,9 @@ String handleSETMethod(String nameToActivate, String key, String value)
     }
 }
 
-// Handles the GET method
-String handleGETMethod(String nameToActivate, String key)
+String handleGETMethod(String deviceName, String key)
 {
-    if (nameToActivate.equals(serverName))
+    if (deviceName.equals(serverName))
     {
         Serial.println("Activating local device");
         if (setCallback == NULL)
@@ -195,18 +199,18 @@ String handleGETMethod(String nameToActivate, String key)
             return "200 OK " + value;
         }
     }
-    else if (validateDevice(nameToActivate) != -1)
+    else if (validateDevice(deviceName) != -1)
     {
         Serial.println("Activating remote device");
-        IPAddress ip = devices[validateDevice(nameToActivate)].ip;
-        String requestStr = "GET " + nameToActivate + " " + key;
+        IPAddress ip = devices[validateDevice(deviceName)].ip;
+        String requestStr = "GET " + deviceName + " " + key;
         String response = sendUDPRequest(requestStr.c_str(), ip, 9999);
-        Serial.printf("Response from device '%s': %s\n", nameToActivate, response.c_str());
+        Serial.printf("Response from device '%s': %s\n", deviceName, response.c_str());
         return response.c_str();
     }
     else
     {
-        String requestStr = "GET " + nameToActivate + " " + key;
+        String requestStr = "GET " + deviceName + " " + key;
         String response;
         for (int i = 0; i < numDevices; ++i)
         {
@@ -225,7 +229,6 @@ String handleGETMethod(String nameToActivate, String key)
     }
 }
 
-// Handles the NAME method
 String handleNameMethod(String packetData)
 {
     int spaceIndex = packetData.indexOf(' ');
@@ -244,7 +247,6 @@ String handleNameMethod(String packetData)
     }
 }
 
-// Handles the WHO method
 String handleWhoMethod()
 {
     if (!serverName.isEmpty())
@@ -269,29 +271,56 @@ String handleWhoMethod()
 
 String handleADDMethod(String packetData)
 {
-    String name = packetData.substring(4, packetData.indexOf(' ', 4));
-    String ipString = packetData.substring(packetData.indexOf(' ', 4) + 1);
+    const char *splitted = strtok((char *)packetData.c_str(), " ");
+    bool device = true;
+    char *tokens[4];
+    int index = 0;
+    while (splitted != NULL)
+    {
+        tokens[index] = const_cast<char *>(splitted);
+        splitted = strtok(NULL, " ");
+        index++;
+    }
+
+    if (index >= 4 && strcmp(strlwr(tokens[3]), "device") == 0)
+    {
+        device = true;
+    }
+    else
+    {
+        device = false;
+    }
+
+    String name = tokens[1];
+    String ipString = tokens[2];
+    Serial.printf("Name: '%s', IP: '%s'\n", name.c_str(), ipString.c_str());
     trim((char *)(name).c_str());
     if (name.length() > 0 && ipString.length() > 0)
     {
-        if (name.equals(serverName))
+        if (name.equals(serverName) || validateDevice(name) != -1)
         {
-            return "203 Name already in use";
+            return "200 Name already in use";
         }
 
         IPAddress ip;
         if (ip.fromString(ipString))
         {
 
-            String requestStr = "ADD " + serverName + " " + serverIp;
-            String response = sendUDPRequest(requestStr.c_str(), ip, 9999);
-
+            char local[20];
+            IPAddress ipLocal = serverIp;
+            ipLocal.toString().toCharArray(local, 20);
+            String response = "200 OK";
+            if(!device){
+                String requestStr = "ADD " + serverName + " " + local + " device";
+                Serial.printf("Sending request to device '%s': %s\n", name.c_str(), requestStr.c_str());
+                response = sendUDPRequest(requestStr.c_str(), broadcastIP, 9999);
+            }
             if (response.startsWith("200"))
             {
                 devices[numDevices].name = name;
                 devices[numDevices].ip = ip;
                 numDevices++;
-                Serial.printf("New device added - Name: '%s', IP: '%s'\n", name.c_str(), ipString.c_str());
+                Serial.printf("New device added - Name: '%s', IP: '%s'\n", name.c_str(), ipString);
                 return "200 OK " + serverName;
             }
             else
@@ -312,16 +341,20 @@ String handleADDMethod(String packetData)
     }
 }
 
+/**
+ * @brief Manejador del metodo DEL
+ * @param packetData Mensaje recibido
+ * @return Respuesta del servidor
+ * 
+*/
 String handleDELMethod(String packetData)
 {
-    // RM message: Remove a device
     String nameToRemove = packetData.substring(packetData.indexOf(' ', 1) + 1);
 
     for (int i = 0; i < numDevices; ++i)
     {
         if (devices[i].name == nameToRemove)
         {
-            // Remove the found device by shifting the remaining elements
             for (int j = i; j < numDevices - 1; ++j)
             {
                 devices[j] = devices[j + 1];
@@ -333,11 +366,14 @@ String handleDELMethod(String packetData)
         }
     }
 
-    // Device not found
     Serial.printf("Device '%s' not found.\n", nameToRemove);
     return "404 Not Found";
 }
 
+/**
+ * @brief Manejador del metodo LIST
+ * @return Lista de dispositivos
+*/
 String handleListMethod()
 {
     String list = "Dispositivos:\n";
@@ -349,10 +385,14 @@ String handleListMethod()
     return list;
 }
 
-// handles processUDPPacket receives the whole packet and processes it
-String processUDPPacket(String packetData, size_t length)
+/**
+ * @brief Procesa un paquete UDP
+ * @param packetData Mensaje recibido
+ * @return Respuesta del servidor
+*/
+String processUDPPacket(String packetData)
 {
-    // remove breakline and trim packetdata
+    //limpiar el mensaje
     packetData.replace("\n", "");
     packetData.replace("\r", "");
     if (packetData.charAt(packetData.length() - 1) == '\0')
@@ -397,7 +437,7 @@ String processUDPPacket(String packetData, size_t length)
     else if (packetData.startsWith("GET"))
     {
         const char *splitted = strtok((char *)packetData.c_str(), " ");
-        // Save all tokens in an array
+
         char *tokens[3];
         int index = 0;
         while (splitted != NULL)
@@ -417,11 +457,12 @@ String processUDPPacket(String packetData, size_t length)
     }
     else if (packetData.startsWith("PING"))
     {
+        // PING Responder con OK
         returnMessage = "200 OK";
     }
     else if (packetData.startsWith("ADD"))
     {
-        // ADD message: Add a new device
+        // ADD Agregar un dispositivo
         if (numDevices == 16)
         {
             return "400 Max Devices Reached";
@@ -431,6 +472,7 @@ String processUDPPacket(String packetData, size_t length)
     }
     else if (packetData.startsWith("DEL"))
     {
+        // RM remover un dispositivo
         if (numDevices == 0)
         {
             return "400 No devices to remove";
@@ -440,6 +482,7 @@ String processUDPPacket(String packetData, size_t length)
     }
     else if (packetData.startsWith("LIST"))
     {
+
         returnMessage = handleListMethod();
     }
     else

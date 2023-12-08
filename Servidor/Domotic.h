@@ -37,7 +37,6 @@ void setSetCallback(SetCallBack callback);
 void setGetCallback(GetCallBack callback);
 String sendUDPRequest(const char *message, IPAddress targetIP, int targetPort);
 int validateDevice(String nameToActivate);
-String deviceName(String packetData, int start);
 String handleSETMethod(String nameToActivate, String key, String value);
 String handleGETMethod(String nameToActivate, String key);
 String handleNameMethod(String packetData);
@@ -45,6 +44,6 @@ String handleWhoMethod();
 String handleADDMethod(String packetData);
 String handleDELMethod(String packetData);
 String handleListMethod();
-String processUDPPacket(String data, size_t length);
+String processUDPPacket(String data);
 
 #endif // DOMOTIC_H

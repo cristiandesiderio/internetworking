@@ -2,19 +2,16 @@
  * @file Servidor.ino
  * @brief This file contains the code for an asynchronous UDP server that handles various commands and communicates with multiple devices.
  */
-
 #include "WiFi.h"
 #include "WiFiUdp.h"
 #include "Domotic.h"
 
-
 const int LED21pin = 21;
 const int LED19pin = 19;
 
-const char *ssid = "Grandiosa";
-const char *password = "Universidad";
+const char *ssid = "Cant-touch-this";
+const char *password = "necochea1629";
 AsyncUDP udp;
-
 
 /**
  * @brief Internal handler for the SET method.
@@ -127,7 +124,7 @@ void setup()
 
       String packetData = packet.readString();
 
-      String returnMessage = processUDPPacket(packetData, packet.length());
+      String returnMessage = processUDPPacket(packetData);
       packet.printf(returnMessage.c_str());
    });
   }
