@@ -6,13 +6,13 @@
 #include "Arduino.h"
 #include "AsyncUDP.h"
 
-// Constants
+
 #define MAX_NAME_LENGTH 50
 
 struct Device
 {
-  String name;  ///< Device name
-  IPAddress ip; ///< Device IP address
+  String name;
+  IPAddress ip;
 };
 
 extern Device devices[16];     ///< Array to store devices

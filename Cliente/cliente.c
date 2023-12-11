@@ -74,25 +74,23 @@ int main()
     while (1)
     {
         memset(buffer, 0, sizeof(buffer));
-        // Obtener el mensaje del usuario
+
         printf("Ingrese el mensaje (EXIT para salir): \n");
         fgets(message, MAX_MESSAGE_LEN, stdin);
         trim(message);
 
-        // Salir si el usuario escribe "EXIT"
+
         if (strncmp(message, "EXIT", 4) == 0)
         {
             printf("Saliendo del cliente.\n");
             break;
         }
 
-        // Enviar el mensaje al servidor
+        // Envia mensaje al servidor
         sendto(clientSocket, (const char *)message, strlen(message) + 1,
                MSG_CONFIRM, (const struct sockaddr *)&serverAddr,
                sizeof(serverAddr));
 
-
-        // Esperar la respuesta del servidor
         unsigned long startTime = getMillis();
         while (getMillis() - startTime < timeout)
         {
@@ -108,13 +106,12 @@ int main()
             }
         }
 
-        // Verificar si ha habido un timeout
+
         if (getMillis() - startTime >= timeout)
         {
             printf("Timeout: No se recibió respuesta del servidor en %d segundos.\n", timeout / 1000);
-            // Puedes agregar aquí el código para manejar el timeout según tus necesidades
+            
         }
-        //
     }
 
     // Cerrar el socket
