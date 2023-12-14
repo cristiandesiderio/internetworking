@@ -7,7 +7,6 @@
 #include "Domotic.h"
 
 const int LED21pin = 21;
-const int LED19pin = 19;
 
 const char *ssid = "Cant-touch-this";
 const char *password = "necochea1629";
@@ -24,7 +23,6 @@ bool localSetHandler(String key, String value)
   Serial.printf("Local SET '%s' %s\n", key.c_str(), value.c_str());
   int selectedLED = 21;
   if(key == "LED21") { selectedLED = LED21pin; }
-  else if (key == "LED19") { selectedLED = LED19pin; }
   else { return false; }
 
   if (value == "ON")
@@ -43,6 +41,12 @@ bool localSetHandler(String key, String value)
   }
 
 
+}
+
+
+String localOptionsHandler()
+{
+  return "SET LED21 (ON/OFF) \n GET TEMP \n";
 }
 
 /**
@@ -75,7 +79,6 @@ void setup()
 
   // Set pin modes
   pinMode(21, OUTPUT);
-  pinMode(19, OUTPUT);
   pinMode(2, OUTPUT);
 
   // Connect to WiFi network
@@ -98,8 +101,9 @@ void setup()
     Serial.print("UDP Listening on IP: ");
     Serial.println(WiFi.localIP());
 
-    setGetCallback(GetCallBack(localGETHandler));
     setSetCallback(SetCallBack(localSetHandler));
+    setGetCallback(GetCallBack(localGETHandler));
+    setOptionsCallback(OptionsCallBack(localOptionsHandler));
     
     // Handle incoming packets
     udp.onPacket([](AsyncUDPPacket packet)

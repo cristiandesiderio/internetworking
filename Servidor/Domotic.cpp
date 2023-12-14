@@ -20,11 +20,32 @@ bool notImplementedSetHandler(String key, String value)
 */
 String notImplementedGetHandler(String key, String value)
 {
-    return "Set Not Implemented";
+    return "Get Not Implemented";
 }
 
-SetCallBack setCallback = SetCallBack(notImplementedSetHandler);
+/**
+ * @brief Comportamiento por defecto metodo OPTIONS.
+*/
+String notImplementedOptionsHandler()
+{
+    return "Options Not Implemented";
+}
 
+
+
+OptionsCallBack optionsCallback = OptionsCallBack(notImplementedOptionsHandler);
+
+/**
+ * @brief Setea el comportamiento del metodo OPTIONS.
+ * @param callback Funcion que se ejecutara cuando se reciba un mensaje OPTIONS.
+*/
+void setOptionsCallback(OptionsCallBack callback)
+{
+    optionsCallback = callback;
+}
+
+
+SetCallBack setCallback = SetCallBack(notImplementedSetHandler);
 /**
  * @brief Setea el comportamiento del metodo SET.
  * @param callback Funcion que se ejecutara cuando se reciba un mensaje SET.
@@ -254,7 +275,7 @@ String handleWhoMethod()
         String conf = "Server name: " + serverName + "\n";
         conf += "Server IP: " + serverIp.toString() + "\n";
         conf += "Broadcast IP: " + broadcastIP.toString() + "\n";
-        conf += "Number of dispositivos: " + String(numDevices) + "\n";
+        conf += "Options " + optionsCallback() + "\n";
         conf += "Dispositivos:\n";
         for (int i = 0; i < numDevices; ++i)
         {
@@ -313,7 +334,7 @@ String handleADDMethod(String packetData)
             if(!device){
                 String requestStr = "ADD " + serverName + " " + local + " device";
                 Serial.printf("Sending request to device '%s': %s\n", name.c_str(), requestStr.c_str());
-                response = sendUDPRequest(requestStr.c_str(), broadcastIP, 9999);
+                response = sendUDPRequest(requestStr.c_str(), ip, 9999);
             }
             if (response.startsWith("200"))
             {
@@ -321,7 +342,7 @@ String handleADDMethod(String packetData)
                 devices[numDevices].ip = ip;
                 numDevices++;
                 Serial.printf("New device added - Name: '%s', IP: '%s'\n", name.c_str(), ipString);
-                return "200 OK " + serverName;
+                return "200 OK " + name;
             }
             else
             {
@@ -454,6 +475,8 @@ String processUDPPacket(String packetData)
         }
 
         returnMessage = handleGETMethod(tokens[1], tokens[2]);
+    }else if(packetData.startsWith("OPTIONS")){
+        returnMessage = optionsCallback();
     }
     else if (packetData.startsWith("PING"))
     {

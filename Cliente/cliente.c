@@ -4,9 +4,10 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <ctype.h>
-#include <time.h>
+#include <sys/time.h>
+#include <errno.h>
 
-#define SERVER_PORT 9999 // Cambia esto con el puerto de tu servidor
+#define SERVER_PORT 9999
 #define MAX_MESSAGE_LEN 1024
 
 void trim(char *str)
@@ -30,26 +31,17 @@ void flush_stdin()
         ;
 }
 
-unsigned long getMillis()
-{
-    clock_t currentTime = clock();
-    return (unsigned long)(currentTime * 1000 / CLOCKS_PER_SEC);
-}
 
 
 int main()
 {
-    int timeout = 10000;
+
 
     int clientSocket;
     struct sockaddr_in serverAddr;
     char message[MAX_MESSAGE_LEN];
     char buffer[MAX_MESSAGE_LEN];
-    char serverIP[16]; // Se asume que una dirección IPv4 tiene un máximo de 15 caracteres.
-
-    printf("Ingrese la dirección IP del servidor: \n");
-    fgets(serverIP, sizeof(serverIP), stdin);
-    trim(serverIP);
+    char serverIP[16];
 
     // Crear un socket UDP
     if ((clientSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -58,13 +50,29 @@ int main()
         exit(EXIT_FAILURE);
     }
 
-    // Configurar la información del servidor
-    memset(&serverAddr, 0, sizeof(serverAddr));
+    printf("Ingrese la dirección IP del servidor: \n");
+    fgets(serverIP, sizeof(serverIP), stdin);
+    trim(serverIP);
+
+    serverAddr.sin_addr.s_addr = inet_addr(serverIP);
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(SERVER_PORT);
+
     if (inet_pton(AF_INET, serverIP, &serverAddr.sin_addr) <= 0)
     {
-        perror("Error al configurar la dirección del servidor");
+        perror("Error al configurar la dirección del servidor\n");
+        close(clientSocket);
+        exit(EXIT_FAILURE);
+    }
+
+
+    struct timeval timeout;
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+    int ret = setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    if (ret < 0)
+    {
+        perror("Error al configurar el timeout\n");
         close(clientSocket);
         exit(EXIT_FAILURE);
     }
@@ -79,7 +87,6 @@ int main()
         fgets(message, MAX_MESSAGE_LEN, stdin);
         trim(message);
 
-
         if (strncmp(message, "EXIT", 4) == 0)
         {
             printf("Saliendo del cliente.\n");
@@ -91,30 +98,31 @@ int main()
                MSG_CONFIRM, (const struct sockaddr *)&serverAddr,
                sizeof(serverAddr));
 
-        unsigned long startTime = getMillis();
-        while (getMillis() - startTime < timeout)
-        {
-            ssize_t bytesRead = recvfrom(clientSocket, buffer, MAX_MESSAGE_LEN,
-                                         MSG_WAITALL, NULL, NULL);
+        int bytes_received = recvfrom(clientSocket, buffer, MAX_MESSAGE_LEN, MSG_WAITALL, NULL, NULL);
 
-            if (bytesRead > 0)
+        // Si no se recibieron bytes el servidor
+        if (bytes_received < 0)
+        {
+            // Timeout
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
             {
-                // Respuesta del servidor recibida
-                buffer[bytesRead] = '\0';
-                printf("Respuesta del servidor: %s\n", buffer);
-                break;
+                printf("El timeout se activó.\n");
+            }
+            else
+            {
+                perror("Error al recibir la respuesta del servidor\n");
             }
         }
-
-
-        if (getMillis() - startTime >= timeout)
+        else
         {
-            printf("Timeout: No se recibió respuesta del servidor en %d segundos.\n", timeout / 1000);
-            
+            buffer[bytes_received] = '\0';
+            printf("Respuesta del servidor: %s\n", buffer);
         }
+
+
     }
 
-    // Cerrar el socket
+
     close(clientSocket);
 
     return 0;
